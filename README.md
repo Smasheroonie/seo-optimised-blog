@@ -13,7 +13,8 @@ automatically: no code changes, no rebuilds.
 - **Papa Parse** - CSV parsing
 - **TypeScript / vue-tsc** - type safety across app and server code
 - **Thaura** (GLM-5.3-Flash, self-hosted AI assistant) - AI-assisted development: scaffolding, implementation, refactoring, debugging and documentation; all output validated by typecheck, production build and end-to-end testing
-- **Render** - Web service hosting
+- **Render** - web service hosting
+- **Git/GitHub** - version control
 
 ## Architecture
 
