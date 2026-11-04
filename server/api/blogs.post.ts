@@ -45,7 +45,7 @@ export default defineEventHandler(async event => {
   // 3. AI copy, validated; deterministic template on any failure.
   let generatedBy: BlogData['source']['generatedBy'] = 'gemini'
   let notice: string | undefined
-  let prose: { seo: BlogData['seo']; content: BlogData['content']; industry: string }
+  let prose: { seo: BlogData['seo']; content: BlogData['content']; industry: string; model?: string }
   try {
     prose = await generateProse(stats, dataset.headers, dataset.rows)
   } catch (err) {
@@ -57,12 +57,22 @@ export default defineEventHandler(async event => {
     notice = `AI copy failed, used template copy instead. Reason: ${reason}`
   }
 
-  // 4. Assemble and store the blog document.
+  // 4. Assemble and store the blog document. Table columns: categorical
+  // breakdowns first, then every remaining column (Employees, Website,
+  // Description...), so nothing in the dataset is hidden from the reader.
+  // The table already generates its own Rank column, so a rank column in
+  // the source data is not repeated.
+  const extraColumns = [...schema.categoricalColumns]
+  for (const h of dataset.headers) {
+    if (h === schema.nameColumn || h === schema.amountColumn) continue
+    if (extraColumns.includes(h) || /^rank$/i.test(h.trim())) continue
+    extraColumns.push(h)
+  }
   const blog: BlogData = {
     slug: slugify(prose.seo.title),
     createdAt: new Date().toISOString(),
     industry: prose.industry,
-    source: { filename, rows: dataset.rows.length, generatedBy },
+    source: { filename, rows: dataset.rows.length, generatedBy, model: prose.model },
     seo: prose.seo,
     content: prose.content,
     stats,
@@ -72,9 +82,10 @@ export default defineEventHandler(async event => {
       schema.nameColumn,
       schema.amountColumn,
       schema.currency,
-      schema.categoricalColumns,
+      extraColumns,
     ),
   }
+
   const slug = await saveBlog(blog)
 
   setResponseStatus(event, 201)

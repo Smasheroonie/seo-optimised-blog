@@ -49,6 +49,8 @@ export interface DatasetStats {
   amountColumn: string | null
   numeric: NumericSummary | null
   top10: { rank: number; name: string; value: number }[]
+  /** Share of the total held by the top 10, as a percentage (e.g. 62.4), or null. */
+  top10SharePct: number | null
   breakdowns: CategorySummary[]
 }
 
@@ -65,6 +67,8 @@ export interface BlogData {
     filename: string
     rows: number
     generatedBy: 'gemini' | 'template'
+    /** The model that produced the copy, when AI-generated. */
+    model?: string
   }
   seo: BlogSeo
   content: BlogContent

@@ -25,10 +25,5 @@
     "@types/papaparse": "^5.5.2",
     "typescript": "^6.0.3",
     "vue-tsc": "^3.3.14"
-  },
-  "allowScripts": {
-    "@google/genai@1.52.0": true,
-    "esbuild@0.28.2": true,
-    "protobufjs@7.6.6": true
   }
 }

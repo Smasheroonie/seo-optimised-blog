@@ -32,8 +32,8 @@ CSV dataset ──► 1. Parsing & schema detection  (server/utils/csv.ts)
                      ▼
                 5. Presentation                (app/pages/blog/[slug].vue)
                      Nuxt SSR template: intro, stat cards, analysis sections,
-                     full ranking table, breakdowns. Same template serves any
-                     industry; the dataset is data, not code.
+                     full ranking table. Same template serves any industry;
+                     the dataset is data, not code.
 ```
 
 Key decision: **data and presentation are fully decoupled.** The template renders a
@@ -48,6 +48,20 @@ Key decision: **data and presentation are fully decoupled.** The template render
 - Dynamic `sitemap.xml` (lists every generated blog) and `robots.txt`, both origin-aware.
 - Semantic, accessible HTML: one `h1`, labelled sections, `scope="col"` table headers,
   visible focus states, mobile-first responsive layout.
+
+## Interactive table and management
+
+The ranking table is sortable by every column (numeric columns compare parsed
+money values, text columns compare alphabetically, `aria-sort` kept in sync) and
+paginated client-side (10/25/50/100 rows per page). Long-text cells such as
+company descriptions are truncated at 90 characters and expand on click. The
+full table still ships in the SSR HTML and the JSON-LD `ItemList` always
+reflects the canonical ranking order, so search engines are unaffected by how a
+reader sorts or pages.
+
+Blogs can be deleted from the home page (`DELETE /api/blogs/:slug`, with a
+confirmation step); the sitemap updates automatically because it is generated
+from the same storage.
 
 ## Running locally
 
@@ -67,6 +81,7 @@ different columns and messier money formats ("$120M", "15,000,000", "£12.5m").
 |---|---|---|
 | `GEMINI_API_KEY` | No | Google Gemini API key (free tier). Without it, or if the call fails, the pipeline uses deterministic template prose and marks the blog `template copy`. |
 | `GEMINI_MODEL` | No | Model name, default `gemini-3.8-flash`. |
+| `GEMINI_FALLBACK_MODELS` | No | Comma-separated older models tried in order when the primary model fails. Default `gemini-2.5-flash`. The model that produced a blog is recorded in its footer. |
 | `NUXT_PUBLIC_SITE_URL` | In production | Public origin, used for canonical URLs, sitemap and robots.txt. |
 
 Get a free key at [Google AI Studio](https://aistudio.google.com/apikey).

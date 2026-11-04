@@ -1,5 +1,6 @@
 import Papa from 'papaparse'
 import type { DatasetStats, NumericSummary, CategorySummary, GroupSummary } from '#shared/types'
+import { parseAmount } from '#shared/utils/money'
 
 export interface ParsedDataset {
   headers: string[]
@@ -39,34 +40,6 @@ const AMOUNT_HEADER_HINTS =
 
 /** Normalise a header for comparison: lowercase, alphanumerics only. */
 const norm = (h: string) => h.toLowerCase().replace(/[^a-z0-9]/g, '')
-
-/**
- * Parse human money strings into numbers: "£2.5m" -> 2_500_000,
- * "1,000,000" -> 1_000_000, "$120M" -> 120_000_000, "5bn" -> 5_000_000_000.
- * Returns null for anything that is not recognisably a quantity.
- */
-export function parseAmount(raw: unknown): number | null {
-  if (raw == null) return null
-  let s = String(raw).trim()
-  if (!s) return null
-  s = s.replace(/[,\s_]/g, '')
-  s = s.replace(/gbp|usd|eur/gi, '')
-
-  const m = s.match(/^([^0-9.eE+-]*)([-+]?[0-9]+(?:\.[0-9]+)?)([^0-9.]*)$/)
-  if (!m) return null
-  const numStr = m[2] ?? ''
-  const suffix = m[3] ?? ''
-  let n = Number(numStr)
-  if (!Number.isFinite(n) || n < 0) return null
-
-  const suf = suffix.toLowerCase()
-  if (/^(k|kb|thousand)$/.test(suf)) n *= 1e3
-  else if (/^(m|mm|mn|mln|million)$/.test(suf)) n *= 1e6
-  else if (/^(b|bn|bil|billion)$/.test(suf)) n *= 1e9
-  else if (/^(t|tn|trillion)$/.test(suf)) n *= 1e12
-  else if (suf) return null
-  return n
-}
 
 /** Detect the currency most common across raw amount strings ("£", "$", "€" or a code). */
 export function detectCurrency(raws: string[]): string {
@@ -203,13 +176,16 @@ export function computeStats(dataset: ParsedDataset, schema: DatasetSchema): Dat
   const breakdowns: CategorySummary[] = schema.categoricalColumns.map(column => {
     const totals = new Map<string, { count: number; total: number }>()
     for (const r of rows) {
-      const label = (r[column] ?? '').trim()
-      if (!label) continue
-      const entry = totals.get(label) ?? { count: 0, total: 0 }
-      entry.count += 1
-      const v = amountColumn ? parseAmount(r[amountColumn!]) : null
-      if (v != null) entry.total += v
-      totals.set(label, entry)
+      const raw = (r[column] ?? '').trim()
+      if (!raw) continue
+      // Multi-value cells ("Fintech, AI") count towards every listed category.
+      for (const label of raw.split(/[,;/|]/).map(s => s.trim()).filter(Boolean)) {
+        const entry = totals.get(label) ?? { count: 0, total: 0 }
+        entry.count += 1
+        const v = amountColumn ? parseAmount(r[amountColumn!]) : null
+        if (v != null) entry.total += v
+        totals.set(label, entry)
+      }
     }
     const groups: GroupSummary[] = [...totals.entries()]
       .map(([label, g]) => ({ label, count: g.count, total: g.total }))
@@ -218,6 +194,13 @@ export function computeStats(dataset: ParsedDataset, schema: DatasetSchema): Dat
     return { column, label: humanise(column), groups }
   })
 
+  // Share of the total held by the top 10, to one decimal place ("62.4" = 62.4%).
+  const top10Total = top10.reduce((a, c) => a + c.value, 0)
+  const top10SharePct =
+    numeric && numeric.total > 0 && top10.length
+      ? Math.round((top10Total / numeric.total) * 1000) / 10
+      : null
+
   return {
     rowCount: rows.length,
     currency,
@@ -225,6 +208,7 @@ export function computeStats(dataset: ParsedDataset, schema: DatasetSchema): Dat
     amountColumn,
     numeric,
     top10,
+    top10SharePct,
     breakdowns,
   }
 }
@@ -236,20 +220,4 @@ export function humanise(header: string): string {
     .replace(/([a-z])([A-Z])/g, '$1 $2')
     .replace(/\s+/g, ' ')
     .trim()
-}
-
-/** Compact money for prose and cards: "£2.4bn", "$1.2m", "950,000". */
-export function formatMoney(n: number, currency = ''): string {
-  const abs = Math.abs(n)
-  const sym = currency || ''
-  const fmt = new Intl.NumberFormat('en-GB', { maximumFractionDigits: 1 })
-  if (abs >= 1e9) return `${sym}${fmt.format(n / 1e9)}bn`
-  if (abs >= 1e6) return `${sym}${fmt.format(n / 1e6)}m`
-  if (abs >= 1e4) return `${sym}${fmt.format(n / 1e3)}k`
-  return `${sym}${new Intl.NumberFormat('en-GB').format(n)}`
-}
-
-/** Exact money for the ranking table. */
-export function formatMoneyExact(n: number, currency = ''): string {
-  return `${currency}${new Intl.NumberFormat('en-GB', { maximumFractionDigits: 0 }).format(n)}`
 }

@@ -20,11 +20,14 @@ export default defineNuxtConfig({
 
   nitro: {
     // Generated blogs are stored as JSON documents through Nitro's storage
-    // layer, decoupled from the presentation template.
+    // layer, decoupled from the presentation template. The location is
+    // overridable at build time: serverless hosts (Netlify, Vercel) have a
+    // read-only filesystem outside /tmp, so set BLOGS_STORAGE_DIR=/tmp/blogs
+    // there (note /tmp is ephemeral; for durable storage use a persistent host).
     storage: {
       blogs: {
         driver: 'fs',
-        base: './.data/blogs',
+        base: process.env.BLOGS_STORAGE_DIR || './.data/blogs',
       },
     },
   },

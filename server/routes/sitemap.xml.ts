@@ -1,11 +1,7 @@
-import type { BlogListItem } from '#shared/types'
-
 /** Dynamic sitemap listing the home page and every generated blog. */
 export default defineEventHandler(async event => {
   const { siteUrl } = useRuntimeConfig().public
-  const blogs = (await useStorage('blogs').getKeys()).length
-    ? await listBlogs()
-    : ([] as BlogListItem[])
+  const blogs = await listBlogs()
 
   const urls = [
     { loc: `${siteUrl}/`, changefreq: 'weekly', priority: 1.0 },

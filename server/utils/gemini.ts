@@ -1,4 +1,5 @@
 import type { BlogContent, BlogSeo, DatasetStats } from '#shared/types'
+import { formatMoney } from '#shared/utils/money'
 
 /* ------------------------------------------------------------------ */
 /* AI copy generation.                                                 */
@@ -35,30 +36,42 @@ const PROSE_SCHEMA = {
 }
 
 const SYSTEM_PROMPT = `You are an SEO editor for a company-data publisher like Beauhurst.
-You will receive pre-computed statistics and sample rows from a dataset of companies.
+You will receive pre-computed statistics, sample rows and a list of key insights from a dataset of companies.
 Write original, engaging, factually grounded blog copy that would rank well in search engines.
 Rules:
 - Cite ONLY the statistics provided to you. Never invent, round or estimate any number.
+- Write 3 to 5 sections, each with a specific, searchable heading.
+- Your sections MUST discuss the provided key insights explicitly: what the top performers'
+  combined share of the total implies about market concentration, what the gap between the
+  mean and the median says about the distribution, and which category leads each breakdown.
 - Do not name any company unless it appears in the provided top rankings.
 - Write in British English, in a professional but readable tone.
 - The title must be under 60 characters; the meta description under 155.`
 
+/** Older models tried in order when the primary model fails. Overridable via GEMINI_FALLBACK_MODELS. */
+const FALLBACK_MODELS = ['gemini-2.5-flash']
+
 /** Resolve config at request time: runtimeConfig first (NUXT_-prefixed env vars map to it), then plain env vars. */
-function resolveConfig(): { apiKey: string; model: string } {
+function resolveConfig(): { apiKey: string; model: string; fallbacks: string[] } {
   const config = useRuntimeConfig()
+  const configured = (process.env.GEMINI_FALLBACK_MODELS ?? '')
+    .split(',')
+    .map(s => s.trim())
+    .filter(Boolean)
   return {
     apiKey: config.geminiApiKey || process.env.GEMINI_API_KEY || '',
     model: config.geminiModel || process.env.GEMINI_MODEL || 'gemini-3.8-flash',
+    fallbacks: configured.length ? configured : FALLBACK_MODELS,
   }
 }
 
-/** Ask Gemini for the blog copy as validated JSON. Throws on any failure. */
+/** Ask Gemini for the blog copy as validated JSON, falling back through older models. */
 export async function generateProse(
   stats: DatasetStats,
   columns: string[],
   sampleRows: Record<string, string>[],
-): Promise<{ seo: BlogSeo; content: BlogContent; industry: string }> {
-  const { apiKey, model } = resolveConfig()
+): Promise<{ seo: BlogSeo; content: BlogContent; industry: string; model: string }> {
+  const { apiKey, model, fallbacks } = resolveConfig()
   if (!apiKey) throw new Error('GEMINI_API_KEY not configured')
 
   const { GoogleGenAI } = await import('@google/genai')
@@ -69,27 +82,71 @@ export async function generateProse(
     '',
     'Dataset columns: ' + columns.join(', '),
     'Pre-computed statistics (the only numbers you may reference):',
-    JSON.stringify({ ...stats, top10: stats.top10 }, null, 2),
+    JSON.stringify(stats, null, 2),
+    buildInsights(stats),
     'Sample rows (context only, do not list these companies unless in top10):',
     JSON.stringify(sampleRows.slice(0, 5)),
   ].join('\n')
 
-  const response = await ai.models.generateContent({
-    model,
-    contents: prompt,
-    config: {
-      responseMimeType: 'application/json',
-      responseJsonSchema: PROSE_SCHEMA,
-      temperature: 0.7,
-    },
-  })
+  // Try the primary model first, then each fallback in order. A failure of one
+  // model (quota, deprecation, outage) never takes the pipeline down.
+  const chain = [model, ...fallbacks.filter(m => m && m !== model)]
+  const failures: string[] = []
+  for (const candidate of chain) {
+    try {
+      const response = await ai.models.generateContent({
+        model: candidate,
+        contents: prompt,
+        config: {
+          responseMimeType: 'application/json',
+          responseJsonSchema: PROSE_SCHEMA,
+          temperature: 0.7,
+        },
+      })
 
-  const raw = response.text
-  if (!raw) throw new Error('Empty response from model')
-  const parsed = JSON.parse(raw)
-  const clean = validateProse(parsed)
-  if (!clean) throw new Error('Model output failed validation')
-  return clean
+      const raw = response.text
+      if (!raw) throw new Error('Empty response from model')
+      const parsed = JSON.parse(raw)
+      const clean = validateProse(parsed)
+      if (!clean) throw new Error('Model output failed validation')
+      if (candidate !== chain[0]) {
+        console.warn(`[gemini] primary model "${chain[0]}" unavailable; succeeded with fallback "${candidate}"`)
+      }
+      return { ...clean, model: candidate }
+    } catch (err) {
+      const reason = err instanceof Error ? err.message : String(err)
+      failures.push(`${candidate}: ${reason}`)
+      console.error(`[gemini] model "${candidate}" failed: ${reason}`)
+    }
+  }
+  throw new Error(`All models failed (${chain.join(' -> ')}). ${failures.join('; ')}`)
+}
+
+/** Turn the computed statistics into an explicit list of insights the prose must cover. */
+function buildInsights(stats: DatasetStats): string {
+  const lines: string[] = ['Key insights your sections MUST discuss (cite these exact figures):']
+  if (stats.numeric) {
+    const fmt = (n: number) => formatMoney(n, stats.currency)
+    lines.push(
+      `- Total across all ${stats.rowCount} companies: ${fmt(stats.numeric.total)}; ` +
+        `mean ${fmt(stats.numeric.mean)} vs median ${fmt(stats.numeric.median)} ` +
+        `(a mean well above the median signals a small number of outsized companies).`,
+    )
+  }
+  if (stats.top10SharePct != null) {
+    lines.push(
+      `- The top 10 companies account for ${stats.top10SharePct}% of the total ` +
+        `(${stats.top10[0] ? `led by ${stats.top10[0].name}` : ''}).`,
+    )
+  }
+  for (const bd of stats.breakdowns) {
+    const leader = bd.groups[0]
+    if (leader) {
+      const total = leader.total ? ` with ${formatMoney(leader.total, stats.currency)}` : ''
+      lines.push(`- Leading ${bd.label.toLowerCase()}: ${leader.label} (${leader.count} companies${total}).`)
+    }
+  }
+  return lines.join('\n')
 }
 
 /** Strip markdown artefacts and collapse whitespace. The Vue layer escapes text anyway. */

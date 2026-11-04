@@ -21,6 +21,23 @@ function pick(f: Event) {
   state.value = 'idle'
 }
 
+const deleting = ref('')
+
+async function removeBlog(slug: string, title: string) {
+  if (!window.confirm(`Delete "${title}"? This cannot be undone.`)) return
+  deleting.value = slug
+  errorMsg.value = ''
+  try {
+    await $fetch(`/api/blogs/${slug}`, { method: 'DELETE' })
+    await refresh()
+  } catch (err: unknown) {
+    const e = err as { data?: { statusMessage?: string }; message?: string }
+    errorMsg.value = e?.data?.statusMessage || e?.message || 'Delete failed.'
+  } finally {
+    deleting.value = ''
+  }
+}
+
 async function submit() {
   if (!file.value) return
   state.value = 'working'
@@ -83,12 +100,23 @@ async function submit() {
       <p v-if="!blogs.length" class="hint">Nothing published yet. Upload a CSV above to generate the first page.</p>
       <ul v-else class="blog-list">
         <li v-for="b in blogs" :key="b.slug">
-          <NuxtLink :to="`/blog/${b.slug}`">{{ b.title }}</NuxtLink>
-          <span class="meta">
-            {{ b.industry }} · {{ b.rows }} companies ·
-            {{ b.generatedBy === 'gemini' ? 'AI-generated copy' : 'template copy' }} ·
-            {{ new Date(b.createdAt).toLocaleDateString('en-GB') }}
-          </span>
+          <div class="blog-list-main">
+            <NuxtLink :to="`/blog/${b.slug}`">{{ b.title }}</NuxtLink>
+            <span class="meta">
+              {{ b.industry }} · {{ b.rows }} companies ·
+              {{ b.generatedBy === 'gemini' ? 'AI-generated copy' : 'template copy' }} ·
+              {{ new Date(b.createdAt).toLocaleDateString('en-GB') }}
+            </span>
+          </div>
+          <button
+            type="button"
+            class="btn btn-danger"
+            :disabled="deleting === b.slug"
+            :aria-label="`Delete ${b.title}`"
+            @click="removeBlog(b.slug, b.title)"
+          >
+            {{ deleting === b.slug ? 'Deleting…' : 'Delete' }}
+          </button>
         </li>
       </ul>
     </section>

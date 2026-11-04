@@ -1,4 +1,5 @@
 import type { BlogData, BlogListItem, TableData } from '#shared/types'
+import { parseAmount, formatMoneyExact } from '#shared/utils/money'
 
 /** Slugs are safe for URLs and filesystem keys. */
 export function slugify(text: string): string {
@@ -19,7 +20,7 @@ export function buildTable(
   currency: string,
   extraColumns: string[],
 ): TableData {
-  const shown = extraColumns.slice(0, 3)
+  const shown = extraColumns.slice(0, 5)
   const tableHeaders = ['Rank', nameColumn, ...(amountColumn ? [amountColumn] : []), ...shown]
   const sorted = [...rows].sort((a, b) => {
     if (!amountColumn) return 0
