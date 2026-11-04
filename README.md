@@ -1,7 +1,7 @@
 # AI-Powered SEO Blog Generator
 
 Turns a company dataset (CSV) into a server-rendered, SEO-optimised blog page. Built with
-**Nuxt 4.6** as part of the Beauhurst Graduate/Junior Web Developer technical assessment.
+**Nuxt 4.6**.
 
 Upload any industry's CSV through the web interface and the pipeline generates a new blog page
 automatically: no code changes, no rebuilds.
@@ -67,13 +67,11 @@ from the same storage.
 
 ```bash
 npm install
-cp .env.example .env        # add your GEMINI_API_KEY (optional, see below)
 npm run dev                 # http://localhost:3000
 ```
+Upload your own CSV on the home page and click Generate to create a blog post.
 
-Upload `sample-data/fintech-sample.csv` (or your own CSV) on the home page. Try
-`sample-data/healthtech-sample.csv` to see the same pipeline handle a different industry,
-different columns and messier money formats ("$120M", "15,000,000", "£12.5m").
+Note: a .env file must be created in order for the project to be run locally:
 
 ## Environment variables
 
@@ -91,8 +89,8 @@ Get a free key at [Google AI Studio](https://aistudio.google.com/apikey).
 Deployed as a Nuxt SSR app (not a static build, because upload + generation are server-side).
 Works on any Node-capable free host:
 
+- **Recommended: Railway / Render free tier / Fly.io**: `npm ci && npm run build && node .output/server/index.mjs`.
 - **Vercel / Netlify**: connect the repo, set the environment variables, done.
-- **Railway / Render free tier / Fly.io**: `npm ci && npm run build && node .output/server/index.mjs`.
 
 Set `NUXT_PUBLIC_SITE_URL` to the deployed URL.
 
@@ -110,7 +108,7 @@ sit exclusively in build-time tooling pulled in transitively by Nuxt/Nitro (`dee
   The vulnerable transitive packages that *do* have patches (`minimatch`, `glob`) are pinned
   via npm `overrides` in `package.json`.
 
-## Known limitations (honest list)
+## Known limitations
 
 - Storage is the filesystem of the deployed instance (`useStorage` fs driver). On ephemeral
   serverless hosts generated blogs can disappear between deployments; a V2 would move to a
