@@ -1,0 +1,121 @@
+/* Accessible, mobile-first design. System font stack: no third-party requests. */
+:root {
+  --bg: #f7f8fa;
+  --surface: #ffffff;
+  --ink: #16202a;
+  --muted: #5b6773;
+  --accent: #0f6e5d;
+  --accent-ink: #ffffff;
+  --border: #dde3e9;
+  --danger: #b3261e;
+  --radius: 10px;
+}
+
+* { box-sizing: border-box; }
+
+html { color-scheme: light; }
+
+body {
+  margin: 0;
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  background: var(--bg);
+  color: var(--ink);
+  line-height: 1.6;
+}
+
+.site { min-height: 100vh; display: flex; flex-direction: column; }
+
+.site-header {
+  display: flex;
+  align-items: baseline;
+  gap: 1rem;
+  padding: 1rem clamp(1rem, 4vw, 3rem);
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+}
+.brand { font-weight: 700; font-size: 1.15rem; color: var(--accent); text-decoration: none; }
+.tagline { color: var(--muted); font-size: 0.9rem; }
+
+.container { width: min(960px, 100% - 2rem); margin-inline: auto; padding-block: 2rem; flex: 1; }
+
+.hero h1 { font-size: clamp(1.6rem, 4vw, 2.3rem); line-height: 1.2; margin: 0 0 0.5rem; }
+.hero p { color: var(--muted); max-width: 60ch; }
+
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 1.25rem 1.5rem;
+  margin-block: 1.5rem;
+}
+.upload-card h2 { margin-top: 0; }
+
+.upload-form { display: flex; flex-wrap: wrap; gap: 0.75rem; align-items: center; }
+.upload-form input[type="file"] { font: inherit; }
+
+.btn {
+  display: inline-block;
+  background: var(--accent);
+  color: var(--accent-ink);
+  border: none;
+  border-radius: 999px;
+  padding: 0.55rem 1.3rem;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+  text-decoration: none;
+}
+.btn:hover { filter: brightness(1.1); }
+.btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.btn:focus-visible, a:focus-visible, input:focus-visible { outline: 3px solid #7ac0b4; outline-offset: 2px; }
+
+.hint { color: var(--muted); font-size: 0.9rem; }
+.error { color: var(--danger); font-weight: 600; }
+.success { border-top: 1px solid var(--border); margin-top: 1rem; padding-top: 1rem; }
+
+.blog-list { list-style: none; padding: 0; display: grid; gap: 0.75rem; }
+.blog-list a { font-weight: 600; font-size: 1.05rem; color: var(--accent); text-decoration: none; }
+.blog-list a:hover { text-decoration: underline; }
+.meta { display: block; color: var(--muted); font-size: 0.9rem; }
+
+/* Blog page */
+.blog-header .industry { color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; font-size: 0.85rem; }
+.blog-header h1 { font-size: clamp(1.6rem, 4vw, 2.2rem); line-height: 1.2; margin: 0.25rem 0 1rem; }
+.intro { font-size: 1.1rem; }
+
+.stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 0.75rem; margin-block: 1.5rem; }
+.stat-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+.stat-value { font-size: 1.4rem; font-weight: 700; color: var(--accent); }
+.stat-label { color: var(--muted); font-size: 0.85rem; }
+
+.blog-section h2, .ranking h2, .breakdown h2 { font-size: 1.3rem; margin-top: 2rem; }
+
+.table-wrap { overflow-x: auto; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); }
+table { border-collapse: collapse; width: 100%; font-size: 0.92rem; }
+th, td { text-align: left; padding: 0.55rem 0.9rem; border-bottom: 1px solid var(--border); }
+thead th { background: #eef2f4; position: sticky; top: 0; white-space: nowrap; }
+tbody tr:last-child td { border-bottom: none; }
+tbody tr:hover { background: #f2f7f6; }
+td.num { font-variant-numeric: tabular-nums; }
+
+.breakdown-list { list-style: none; padding: 0; display: grid; gap: 0.4rem; }
+.breakdown-list li { display: flex; justify-content: space-between; gap: 1rem; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 0.5rem 0.9rem; }
+
+.blog-conclusion { margin-top: 2rem; font-size: 1.05rem; }
+.blog-meta { margin-top: 2.5rem; border-top: 1px solid var(--border); padding-top: 1rem; }
+
+.site-footer { padding: 1.5rem clamp(1rem, 4vw, 3rem); color: var(--muted); font-size: 0.85rem; border-top: 1px solid var(--border); background: var(--surface); }
+.site-footer p { margin: 0; }
+
+.visually-hidden {
+  position: absolute; width: 1px; height: 1px; margin: -1px;
+  clip: rect(0 0 0 0); overflow: hidden; white-space: nowrap;
+}
