@@ -6,6 +6,15 @@ Turns a company dataset (CSV) into a server-rendered, SEO-optimised blog page. B
 Upload any industry's CSV through the web interface and the pipeline generates a new blog page
 automatically: no code changes, no rebuilds.
 
+## Tools used
+
+- **Nuxt 4.6** (Vue 3, Nitro) - required framework: SSR pages, server routes and JSON storage
+- **Google Gemini API** (`@google/genai`, gemini-3.6-flash with automatic fallback) - SEO blog copy generation
+- **Papa Parse** - CSV parsing
+- **TypeScript / vue-tsc** - type safety across app and server code
+- **Thaura** (GLM-5.3-Flash, self-hosted AI assistant) - AI-assisted development: scaffolding, implementation, refactoring, debugging and documentation; all output validated by typecheck, production build and end-to-end testing
+- **Render** - Web service hosting
+
 ## Architecture
 
 Three layers, deliberately kept separate:
