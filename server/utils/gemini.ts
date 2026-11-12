@@ -31,8 +31,20 @@ const PROSE_SCHEMA = {
       },
     },
     conclusion: { type: 'string' },
+    faq: {
+      type: 'array',
+      description: '3-5 questions a searcher might realistically ask about this ranking, each answered in 2-3 sentences',
+      items: {
+        type: 'object',
+        properties: {
+          question: { type: 'string' },
+          answer: { type: 'string', description: 'Two to three sentences; may cite the given statistics' },
+        },
+        required: ['question', 'answer'],
+      },
+    },
   },
-  required: ['industry', 'title', 'metaDescription', 'keywords', 'intro', 'sections', 'conclusion'],
+  required: ['industry', 'title', 'metaDescription', 'keywords', 'intro', 'sections', 'conclusion', 'faq'],
 }
 
 const SYSTEM_PROMPT = `You are an SEO editor for a company-data publisher like Beauhurst.
@@ -46,7 +58,9 @@ Rules:
   mean and the median says about the distribution, and which category leads each breakdown.
 - Do not name any company unless it appears in the provided top rankings.
 - Write in British English, in a professional but readable tone.
-- The title must be under 60 characters; the meta description under 155.`
+- The title must be under 60 characters; the meta description under 155.
+- The FAQ must contain 3 to 5 genuine searcher questions (the kind typed into
+  Google about rankings like this), each answered factually from the statistics.`
 
 /** Older models tried in order when the primary model fails. Overridable via GEMINI_FALLBACK_MODELS. */
 const FALLBACK_MODELS = ['gemini-2.5-flash']
@@ -70,6 +84,8 @@ export async function generateProse(
   stats: DatasetStats,
   columns: string[],
   sampleRows: Record<string, string>[],
+  industry?: string,
+  industryFixed = false,
 ): Promise<{ seo: BlogSeo; content: BlogContent; industry: string; model: string }> {
   const { apiKey, model, fallbacks } = resolveConfig()
   if (!apiKey) throw new Error('GEMINI_API_KEY not configured')
@@ -77,9 +93,14 @@ export async function generateProse(
   const { GoogleGenAI } = await import('@google/genai')
   const ai = new GoogleGenAI({ apiKey })
 
+  const industryLine = industry
+    ? `Industry label: "${industry}" — use it ${industryFixed ? 'exactly as given' : 'as inferred from the data; you may refine it if the dataset clearly supports something more precise'}.`
+    : 'Infer a short industry label for this dataset from the columns and sample rows.'
+
   const prompt = [
     SYSTEM_PROMPT,
     '',
+    industryLine,
     'Dataset columns: ' + columns.join(', '),
     'Pre-computed statistics (the only numbers you may reference):',
     JSON.stringify(stats, null, 2),
@@ -186,10 +207,23 @@ export function validateProse(parsed: unknown): { seo: BlogSeo; content: BlogCon
     ? p.keywords.map(k => sanitiseText(k)).filter(Boolean).slice(0, 6)
     : []
 
+  const faq = Array.isArray(p.faq)
+    ? (p.faq as unknown[])
+        .map(f => {
+          if (typeof f !== 'object' || f == null) return null
+          const item = f as Record<string, unknown>
+          const question = sanitiseText(item.question)
+          const answer = sanitiseText(item.answer)
+          return question && answer ? { question, answer } : null
+        })
+        .filter((f): f is { question: string; answer: string } => f != null)
+        .slice(0, 5)
+    : []
+
   return {
     industry,
     seo: { title, description: metaDescription, keywords },
-    content: { intro, sections, conclusion: conclusion || '' },
+    content: { intro, sections, conclusion: conclusion || '', faq },
   }
 }
 
@@ -197,8 +231,11 @@ export function validateProse(parsed: unknown): { seo: BlogSeo; content: BlogCon
 /* Deterministic fallback: same shape, zero AI dependency.             */
 /* ------------------------------------------------------------------ */
 
-export function templateProse(stats: DatasetStats): { seo: BlogSeo; content: BlogContent; industry: string } {
-  const industry = 'Company Analysis'
+export function templateProse(
+  stats: DatasetStats,
+  industry?: string,
+): { seo: BlogSeo; content: BlogContent; industry: string } {
+  const label = industry || 'Company Analysis'
   const cur = stats.currency
   const fmt = (n: number) => formatMoney(n, cur)
   const title = `Top ${stats.rowCount} Companies Ranked by ${humanise(stats.amountColumn ?? 'Funding')}`
@@ -232,21 +269,69 @@ export function templateProse(stats: DatasetStats): { seo: BlogSeo; content: Blo
   if (!sections.length) sections.push({ heading: 'Overview', paragraph: 'The full ranking is shown in the table below.' })
 
   const keywords = [
-    `${industry.toLowerCase()} companies`,
+    `${label.toLowerCase()} companies`,
     'company ranking',
     stats.amountColumn ? humanise(stats.amountColumn).toLowerCase() : 'company data',
     'industry analysis',
   ]
 
   return {
-    industry,
+    industry: label,
     seo: { title: title.slice(0, 70), description: metaDescription.slice(0, 160), keywords },
     content: {
       intro,
       sections,
       conclusion: 'Browse the full ranking above to compare every company in the dataset.',
+      faq: templateFaq(stats),
     },
   }
+}
+
+/** Deterministic FAQ from the statistics, used by the template and to fill gaps in AI output. */
+export function templateFaq(stats: DatasetStats): { question: string; answer: string }[] {
+  const fmt = (n: number) => formatMoney(n, stats.currency)
+  const metric = stats.amountColumn ? humanise(stats.amountColumn).toLowerCase() : 'the ranked metric'
+  const faq: { question: string; answer: string }[] = [
+    {
+      question: `How many companies are in the ranking?`,
+      answer: `The ranking covers ${stats.rowCount} companies, ordered by ${metric}. The full table above lists every entry.`,
+    },
+  ]
+  if (stats.numeric) {
+    faq.push({
+      question: `What is the combined total across all ${stats.rowCount} companies?`,
+      answer:
+        `Together the companies account for ${fmt(stats.numeric.total)}. ` +
+        `The average is ${fmt(stats.numeric.mean)} per company against a median of ${fmt(stats.numeric.median)}.`,
+    })
+  }
+  const top = stats.top10[0]
+  if (top) {
+    faq.push({
+      question: `Which company ranks first?`,
+      answer: `${top.name} holds the top position with ${fmt(top.value)}.`,
+    })
+  }
+  if (stats.top10SharePct != null) {
+    faq.push({
+      question: `How concentrated is the market?`,
+      answer:
+        `The top 10 companies account for ${stats.top10SharePct}% of the combined total, ` +
+        `which indicates a market where a small number of players hold most of the value.`,
+    })
+  }
+  const bd = stats.breakdowns[0]
+  const leader = bd?.groups[0]
+  if (bd && leader) {
+    faq.push({
+      question: `Which ${bd.label.toLowerCase()} leads the ranking?`,
+      answer:
+        `${leader.label} is the leading ${bd.label.toLowerCase()} with ${leader.count} companies` +
+        (leader.total ? ` and a combined ${fmt(leader.total)}` : '') +
+        `. The full breakdown is shown above.`,
+    })
+  }
+  return faq.slice(0, 5)
 }
 
 interface BlogSectionLite {

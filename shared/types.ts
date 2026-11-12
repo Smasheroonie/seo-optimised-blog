@@ -15,10 +15,17 @@ export interface BlogSection {
   paragraph: string
 }
 
+export interface BlogFaq {
+  question: string
+  answer: string
+}
+
 export interface BlogContent {
   intro: string
   sections: BlogSection[]
   conclusion: string
+  /** SEO FAQ: rendered on the page and emitted as FAQPage structured data. */
+  faq: BlogFaq[]
 }
 
 export interface NumericSummary {

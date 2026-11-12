@@ -20,9 +20,9 @@ CSV dataset ──► 1. Parsing & schema detection  (server/utils/csv.ts)
                      │   The LLM never calculates anything.
                      ▼
                 3. AI copy generation          (server/utils/gemini.ts)
-                     │   Gemini writes prose only, from the pre-computed stats,
-                     │   as validated JSON (schema-constrained). Output shape,
-                     │   length and sanitisation are enforced in code.
+                     │   Gemini writes prose and FAQs only, from the pre-computed
+                     │   stats, as validated JSON (schema-constrained). Output
+                     │   shape, length and sanitisation are enforced in code.
                      │   If Gemini is unavailable or returns invalid output the
                      │   pipeline falls back to deterministic template prose,
                      │   so the demo never breaks.
@@ -32,9 +32,13 @@ CSV dataset ──► 1. Parsing & schema detection  (server/utils/csv.ts)
                      ▼
                 5. Presentation                (app/pages/blog/[slug].vue)
                      Nuxt SSR template: intro, stat cards, analysis sections,
-                     full ranking table. Same template serves any industry;
-                     the dataset is data, not code.
+                     full ranking table, FAQ. Same template serves any
+                     industry; the dataset is data, not code.
 ```
+
+The pipeline itself lives in `server/utils/pipeline.ts` and is shared by the
+upload endpoint and the startup seeder (below), so the demo path and the user
+path cannot drift apart.
 
 Key decision: **data and presentation are fully decoupled.** The template renders a
 `BlogData` JSON document; a blog is never "written into" the codebase.
@@ -44,10 +48,40 @@ Key decision: **data and presentation are fully decoupled.** The template render
 - Fully server-rendered (Nuxt SSR): the content, table and statistics are in the initial HTML.
 - `useSeoMeta` title, description, keywords and Open Graph tags per page.
 - Canonical URL per page.
-- JSON-LD structured data: `Article` plus `ItemList` for the ranking.
+- JSON-LD structured data: `Article`, `ItemList` for the ranking and `FAQPage`
+  for the FAQ section (whose questions are always visible on the page, as
+  Google requires).
 - Dynamic `sitemap.xml` (lists every generated blog) and `robots.txt`, both origin-aware.
 - Semantic, accessible HTML: one `h1`, labelled sections, `scope="col"` table headers,
   visible focus states, mobile-first responsive layout.
+
+## Industry detection
+
+Each blog carries an industry label, resolved in this order:
+
+1. **Explicit choice** — an optional "Industry" field on the upload form always wins.
+2. **The dataset's category column** — a column named like Industries / Sector /
+   Primary Focus / Segment: its most common value (multi-value cells are split
+   and counted per token), or a keyword scan of its values.
+3. **Keyword scan of the whole dataset** — headers and sample cell values
+   matched against a pattern list (fintech, healthtech, cleantech, ...), with
+   two hits required so a single incidental mention cannot decide.
+4. **The filename**, stripped of generic words — a weak last resort only.
+5. **"Company Analysis"** when nothing in the data supports a label.
+
+The filename is deliberately last: a file named `fintech.csv` containing
+healthtech companies is labelled Healthtech. When Gemini is configured, the
+inferred label is passed to it as a hint it may refine from the data.
+
+## The example blog, always present
+
+On startup, if the fintech example is not already in the store, a Nitro plugin
+(`server/plugins/seed.ts`) generates it from the bundled sample CSV by running
+the exact same pipeline as an upload. This keeps the deployed app populated
+even after a redeploy or free-tier spin-down wipes the storage, and the seed
+can never drift from the real generation path. Blogs left over from a previous
+session do not block it; deleting the example only keeps it gone until the
+next restart.
 
 ## Interactive table and management
 
@@ -62,6 +96,12 @@ reader sorts or pages.
 Blogs can be deleted from the home page (`DELETE /api/blogs/:slug`, with a
 confirmation step); the sitemap updates automatically because it is generated
 from the same storage.
+
+Every blog also ends with a **Frequently Asked Questions** section: 3–5 genuine
+searcher questions answered from the statistics (by Gemini when configured, by
+a deterministic template otherwise, and the template fills any gap in AI
+output). It is emitted as `FAQPage` structured data for rich-result
+eligibility.
 
 ## Running locally
 
@@ -114,7 +154,9 @@ sit exclusively in build-time tooling pulled in transitively by Nuxt/Nitro (`dee
 
 - Storage is the filesystem of the deployed instance (`useStorage` fs driver). On ephemeral
   serverless hosts generated blogs can disappear between deployments; a V2 would move to a
-  database or object store. On a long-lived Node host (Railway/Render/Fly) it persists.
+  database or object store. On a long-lived Node host (Railway/Render/Fly) it persists. The
+  startup seeder mitigates the visible symptom (an empty index) by regenerating the example,
+  but user-uploaded blogs are still ephemeral on such hosts.
 - Generated blog slugs are unique but a re-upload of the same CSV creates a second page
   rather than updating the first. Uploading identical datasets twice will publish duplicates.
 - AI output is schema-validated and sanitised, and it is instructed to cite only computed

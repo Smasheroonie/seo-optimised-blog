@@ -53,13 +53,24 @@ body {
 
 .upload-form { display: flex; flex-wrap: wrap; gap: 0.75rem; align-items: center; }
 .upload-form input[type="file"] { font: inherit; }
+.upload-form input[type="text"] {
+  font: inherit;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg);
+  color: var(--ink);
+  min-width: 16rem;
+  flex: 1 1 16rem;
+}
+.upload-form input[type="text"]:focus-visible { outline: 3px solid #7ac0b4; outline-offset: 2px; }
 
 .btn {
   display: inline-block;
   background: var(--accent);
   color: var(--ink);
   border: none;
-  border-radius: 999px;
+  border-radius: 10px;
   padding: 0.55rem 1.3rem;
   font: inherit;
   font-weight: 600;
@@ -182,6 +193,31 @@ td.cell-long { max-width: 340px; }
 .page-status { color: var(--muted); font-size: 0.9rem; }
 
 .blog-conclusion { margin-top: 2rem; font-size: 1.05rem; }
+.faq { margin-top: 2rem; }
+.faq h2 { font-size: 1.3rem; }
+.faq-item { border-top: 1px solid var(--border); padding-block: 0.9rem; }
+.faq-item:last-child { border-bottom: 1px solid var(--border); }
+.faq-item h3 { margin: 0 0 0.35rem; font-size: 1.02rem; }
+.faq-item p { margin: 0; color: var(--muted); max-width: 75ch; }
+
+/* Loading spinner. Inherits its colour from the text around it, so the same
+   class works on the accent button and on muted hint text. */
+.spinner {
+  display: inline-block;
+  width: 1em;
+  height: 1em;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 50%;
+  vertical-align: -0.15em;
+  animation: spin 0.8s linear infinite;
+}
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .spinner { animation-duration: 2.5s; }
+}
 .blog-meta { margin-top: 2.5rem; border-top: 1px solid var(--border); padding-top: 1rem; }
 
 .site-footer { padding: 1.5rem clamp(1rem, 4vw, 3rem); color: var(--muted); font-size: 0.85rem; border-top: 1px solid var(--border); background: var(--surface); }

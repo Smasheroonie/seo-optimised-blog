@@ -221,3 +221,96 @@ export function humanise(header: string): string {
     .replace(/\s+/g, ' ')
     .trim()
 }
+
+/* ------------------------------------------------------------------ */
+/* Industry inference: from the data itself, not the filename.         */
+/* The filename is only a weak last resort; a reviewer rightly flagged */
+/* it as fragile, so the chain is: category column -> keyword scan ->  */
+/* filename stem -> generic.                                           */
+/* ------------------------------------------------------------------ */
+
+const INDUSTRY_KEYWORDS: [RegExp, string][] = [
+  [/fintech|financial technology|payments|open banking|neobank|digital banking/i, 'Fintech'],
+  [/healthtech|digital health|medtech|health ?care|\bhealth\b|medical|telemedicine|diagnostics/i, 'Healthtech'],
+  [/cleantech|climate tech|greentech|renewable energy|clean energy|\bsolar\b/i, 'Cleantech'],
+  [/edtech|education technology/i, 'Edtech'],
+  [/insurtech/i, 'Insurtech'],
+  [/biotech|life sciences|pharmaceutical/i, 'Biotech'],
+  [/artificial intelligence|machine learning|\bai\b/i, 'AI'],
+  [/cyber ?security/i, 'Cybersecurity'],
+  [/saas|software as a service/i, 'SaaS'],
+  [/e-?commerce|retail tech|direct-?to-?consumer/i, 'E-commerce'],
+  [/prop ?tech|real estate tech/i, 'Proptech'],
+  [/food ?tech|agritech|agtech/i, 'Foodtech & Agtech'],
+  [/logistics|supply chain/i, 'Logistics'],
+  [/blockchain|crypto|web3/i, 'Blockchain & Web3'],
+  [/robotics/i, 'Robotics'],
+  [/space ?tech|satellite/i, 'Spacetech'],
+  [/legal ?tech/i, 'Legaltech'],
+  [/hr ?tech|people tech/i, 'HRTech'],
+]
+
+/** Words in a filename that carry no industry meaning. */
+const GENERIC_FILE_WORDS = /^(top|best|list|ranking|ranked|companies|company|sample|dataset|data|the|of|in|by|funds|funding|raised|total|uk|gb|100)\b/i
+
+/** Columns that hold category-style values ("Industries", "Primary Focus", "Sector", ...). */
+const CATEGORY_COLUMN_RE = /^(industr|sector|categor|market|domain|focus|field|specialit|segment|vertical)/i
+
+/**
+ * Infer an industry label from the dataset content. Returns '' when nothing
+ * in the data supports a label, in which case the caller falls back to a
+ * generic one.
+ */
+export function inferIndustry(headers: string[], rows: Record<string, string>[], filename: string): string {
+  // 1. A dedicated category column ("Industries", "Primary Focus", ...) is
+  //    the strongest signal. First try its most common value (multi-value
+  //    cells are split, so each token counts separately).
+  const catCol = headers.find(h => CATEGORY_COLUMN_RE.test(h.trim()))
+  const catValues = catCol ? rows.map(r => (r[catCol] ?? '').trim()).filter(Boolean) : []
+  if (catCol && catValues.length) {
+    const counts = new Map<string, number>()
+    for (const v of catValues) {
+      for (const token of v.split(/[,;/|]/)) {
+        const t = token.trim()
+        if (t) counts.set(t, (counts.get(t) ?? 0) + 1)
+      }
+    }
+    const best = [...counts.entries()].sort((a, b) => b[1] - a[1])[0]
+    if (best && best[1] >= Math.max(2, Math.floor(rows.length * 0.1))) return best[0]
+  }
+
+  // 2. Keyword scan of the category column's values. In a column whose job
+  //    is to say what each company does, even a single keyword hit is a
+  //    strong signal ("Mental Health" -> Healthtech).
+  if (catValues.length) {
+    const focused = catValues.join(' ')
+    const counts = new Map<string, number>()
+    for (const [re, label] of INDUSTRY_KEYWORDS) {
+      const matches = focused.match(new RegExp(re.source, 'gi'))
+      if (matches) counts.set(label, matches.length)
+    }
+    const best = [...counts.entries()].sort((a, b) => b[1] - a[1])[0]
+    if (best) return best[0]
+  }
+
+  // 3. Keyword scan across headers and a sample of all cell values
+  //    (descriptions often name the industry repeatedly; two hits required
+  //    so one incidental mention cannot decide).
+  const corpus = headers.join(' ') + ' ' + rows.slice(0, 30).map(r => Object.values(r).join(' ')).join(' ')
+  const kwCounts = new Map<string, number>()
+  for (const [re, label] of INDUSTRY_KEYWORDS) {
+    const matches = corpus.match(new RegExp(re.source, 'gi'))
+    if (matches) kwCounts.set(label, matches.length)
+  }
+  const kwBest = [...kwCounts.entries()].sort((a, b) => b[1] - a[1])[0]
+  if (kwBest && kwBest[1] >= 2) return kwBest[0]
+
+  // 4. Filename stem, stripped of generic words ("top-100-uk-fintech" ->
+  //    "UK Fintech"). Only used when it still says something meaningful.
+  const stem = filename.replace(/\.[a-z]+$/i, '').replace(/[-_]+/g, ' ').trim()
+  const words = stem.split(' ').filter(w => w && !GENERIC_FILE_WORDS.test(w))
+  const label = words.map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')
+  if (label && label.length >= 4 && label.length <= 40) return label
+
+  return ''
+}

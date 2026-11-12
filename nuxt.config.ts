@@ -19,6 +19,10 @@ export default defineNuxtConfig({
   },
 
   nitro: {
+    // Sample datasets bundled into the server build (read at runtime with
+    // useAsset), so the startup seeder works on any host without the
+    // sample-data directory being present on disk.
+    serverAssets: [{ baseName: 'samples', dir: 'sample-data' }],
     // Generated blogs are stored as JSON documents through Nitro's storage
     // layer, decoupled from the presentation template. The location is
     // overridable at build time: serverless hosts (Netlify, Vercel) have a

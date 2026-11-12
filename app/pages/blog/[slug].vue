@@ -52,6 +52,21 @@ useHead({
               name: row[1],
             })),
           },
+          // FAQPage structured data: eligible for rich results. Google
+          // requires the questions to be visible on the page, which the
+          // FAQ section below guarantees.
+          ...(b.content.faq.length
+            ? [
+                {
+                  '@type': 'FAQPage',
+                  mainEntity: b.content.faq.map(f => ({
+                    '@type': 'Question',
+                    name: f.question,
+                    acceptedAnswer: { '@type': 'Answer', text: f.answer },
+                  })),
+                },
+              ]
+            : []),
         ],
       }),
     },
@@ -143,7 +158,7 @@ function sortGlyph(j: number): string {
 // Long-text columns (e.g. descriptions) are truncated in the table and
 // expandable on click. A column qualifies when its cells run long on average,
 // or any single cell does.
-const TRUNCATE_AT = 30
+const TRUNCATE_AT = 20
 
 const longColumns = computed<boolean[]>(() => {
   return b.table.headers.map((_, j) => {
@@ -274,6 +289,14 @@ const fmtStat = (n: number) => formatMoney(n, b.stats.currency)
           <span class="page-status">Page {{ page }} of {{ pageCount }}</span>
           <button type="button" class="btn page-btn" :disabled="page === pageCount" @click="page += 1">Next ›</button>
         </nav>
+      </section>
+
+      <section v-if="b.content.faq.length" class="faq" aria-labelledby="faq-heading">
+        <h2 id="faq-heading">Frequently Asked Questions</h2>
+        <div v-for="f in b.content.faq" :key="f.question" class="faq-item">
+          <h3>{{ f.question }}</h3>
+          <p>{{ f.answer }}</p>
+        </div>
       </section>
 
       <footer v-if="b.content.conclusion" class="blog-conclusion">
